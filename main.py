@@ -2,6 +2,8 @@ from typing import List, Tuple
 import pygame as pg
 import colors as col
 
+import funcs
+
 
 class App:
     def __init__(self, size: Tuple[int, int], name: str = 'App'):
@@ -13,6 +15,7 @@ class App:
         self.clock = pg.time.Clock()
 
         self.drawer = Drawer()
+        self.drawer.m_coords.pos = (self.width / 2, self.height / 2)
 
     def update(self):
         for event in pg.event.get():
@@ -35,25 +38,25 @@ class App:
 
 
 class Coords:
-    def __init__(self, pos: Tuple[int, int]):
+    def __init__(self, pos: Tuple[float, float]):
         self.pos = pos
 
 
 class MainCoords(Coords):
-    def __init__(self, pos: Tuple[int, int]):
+    def __init__(self, pos: Tuple[float, float]):
         super().__init__(pos)
         self.coords: List[Coords] = []
+        self.zoom: float = 1
 
     def get_one(self, coords: Coords):
-        return coords.pos[0] + self.pos[0], \
-               coords.pos[1] + self.pos[1]
+        return funcs.mult_tuple_num(funcs.sum_tuple(coords.pos, self.pos), self.zoom)
 
     def get_all(self):
         return (self.get_one(c) for c in self.coords)
 
 
 class ThingToDraw(Coords):
-    def draw(self, pos: Tuple[int, int], sc: pg.Surface):
+    def draw(self, pos: Tuple[float, float], sc: pg.Surface):
         pass
 
 
@@ -71,18 +74,35 @@ class Drawer:
 
 
 class Dot(ThingToDraw):
-    def __init__(self, pos: Tuple[int, int], name: str):
+    def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot):
         super().__init__(pos)
         self.name = name
+        self.color = color
 
-    def draw(self, pos: Tuple[int, int], sc: pg.Surface):
-        pg.draw.circle(sc, col.dot, pos, 5)
-        sc.blit(pg.font.Font(None, 24).render(self.name, False, col.dot), (pos[0], pos[1] + 10))
+    def draw(self, pos: Tuple[float, float], sc: pg.Surface):
+        pg.draw.circle(sc, self.color, pos, 5)
+        sc.blit(pg.font.Font(None, 24).render(self.name, False, self.color), (pos[0], pos[1] + 10))
+
+
+class MainOpticAxis(ThingToDraw):
+    def __init__(self, dr: Drawer):
+        super().__init__((0, 0))
+
+        self.focus = Dot((100, 0), 'F', col.milk)
+        dr.add(self.focus)
+        dr.add(self)
+
+    def draw(self, pos: Tuple[float, float], sc: pg.Surface):
+        pg.draw.line(sc, col.milk, (0, pos[1]), (sc.get_width(), pos[1]))
 
 
 app = App((1600, 1000))
 
-app.drawer.add(Dot((10, 10), '1'))
+MainOpticAxis(app.drawer)
+
+app.drawer.add(Dot((100, 100), '1'))
+
+app.drawer.m_coords.zoom = 1
 
 while True:
     app.tick()
