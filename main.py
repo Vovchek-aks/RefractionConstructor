@@ -15,12 +15,17 @@ class App:
         self.clock = pg.time.Clock()
 
         self.drawer = Drawer()
-        self.drawer.m_coords.pos = (self.width / 2, self.height / 2)
+        self.drawer.m_coords = MainCoords((self.width / 2, self.height / 2))
+
+        self.things_to_update: List[ThingToUpdate] = [self.drawer.m_coords]
 
     def update(self):
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 exit(0)
+
+            for ttu in self.things_to_update:
+                ttu.update(event)
 
         pg.display.set_caption(str(self.clock.get_fps()))
 
@@ -42,17 +47,44 @@ class Coords:
         self.pos = pos
 
 
-class MainCoords(Coords):
+class ThingToUpdate:
+    def update(self, event: pg.event.Event):
+        pass
+
+
+class MainCoords(Coords, ThingToUpdate):
+    keys_to_vectrors = {
+        pg.K_UP: (0, 1),
+        pg.K_DOWN: (0, -1),
+        pg.K_RIGHT: (-1, 0),
+        pg.K_LEFT: (1, 0)
+    }
+
     def __init__(self, pos: Tuple[float, float]):
         super().__init__(pos)
         self.coords: List[Coords] = []
         self.zoom: float = 1
+
+        self.start_pos = pos
 
     def get_one(self, coords: Coords):
         return funcs.mult_tuple_num(funcs.sum_tuple(coords.pos, self.pos), self.zoom)
 
     def get_all(self):
         return (self.get_one(c) for c in self.coords)
+
+    def update(self, event: pg.event.Event):
+        if event.type == pg.KEYDOWN:
+            if event.key in MainCoords.keys_to_vectrors:
+                delta = funcs.mult_tuple_num(MainCoords.keys_to_vectrors[event.key], 50 / self.zoom)
+                self.pos = funcs.sum_tuple(self.pos, delta)
+
+            elif event.key in {pg.K_PAGEDOWN, pg.K_PAGEUP}:
+                self.zoom += .3 * (1 if event.key == pg.K_PAGEUP else -1)
+
+            elif event.key == pg.K_HOME:
+                self.pos = self.start_pos
+                self.zoom = 1
 
 
 class ThingToDraw(Coords):
@@ -61,9 +93,13 @@ class ThingToDraw(Coords):
 
 
 class Drawer:
+    singleton = None
+
     def __init__(self):
         self.things: List[ThingToDraw] = []
         self.m_coords = MainCoords((0, 0))
+
+        Drawer.singleton = self
 
     def draw_all(self, sc: pg.Surface):
         for i in self.things:
@@ -79,12 +115,15 @@ class Dot(ThingToDraw):
         self.name = name
         self.color = color
 
+        Drawer.singleton.add(self)
+
     def draw(self, pos: Tuple[float, float], sc: pg.Surface):
         pg.draw.circle(sc, self.color, pos, 5)
         sc.blit(pg.font.Font(None, 24).render(self.name, False, self.color), (pos[0], pos[1] + 10))
 
 
 class MainOpticAxis(ThingToDraw):
+
     def __init__(self, dr: Drawer):
         super().__init__((0, 0))
 
@@ -94,15 +133,17 @@ class MainOpticAxis(ThingToDraw):
 
     def draw(self, pos: Tuple[float, float], sc: pg.Surface):
         pg.draw.line(sc, col.milk, (0, pos[1]), (sc.get_width(), pos[1]))
+        pg.draw.line(sc, col.milk, (pos[0], pos[1] + 200), (pos[0], pos[1] - 200), 5)
+
+        if self.focus.pos[0] < self.pos[0]:
+            pg.draw.line(sc, col.milk, (pos[0] - 20, pos[1] + 200), (pos[0] + 20, pos[1] + 200), 5)
 
 
 app = App((1600, 1000))
 
 MainOpticAxis(app.drawer)
 
-app.drawer.add(Dot((100, 100), '1'))
-
-app.drawer.m_coords.zoom = 1
+Dot((100, 100), '1')
 
 while True:
     app.tick()
