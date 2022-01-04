@@ -234,8 +234,8 @@ class Refractor:
 
         rdot = funcs.line_intersection(line1, line2)
 
-        # if not rdot[1]:
-        #     print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
+        if not rdot[1]:
+            print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
 
         return Dot(rdot[0], one.name + '\'', col.dot2, False)
 
@@ -244,11 +244,12 @@ app = App((1600, 1000))
 
 MainOpticAxis()
 
-Line((Dot((-150, 100), '1'), Dot((-100, 150), '2')))
+Line((Dot((-200, 100), '1'), Dot((-170, -150), '2')))
 
-MouseDot((-10, 10), '')
+# MouseDot((-10, 10), '')
+
+Refractor.refract_all()
 
 while True:
     app.tick()
-    Refractor.refract_all()
 
