@@ -58,10 +58,6 @@ class ThingToUpdate:
     def update(self, event: pg.event.Event):
         pass
 
-    def __del__(self):
-        if self in App.singleton.things_to_update:
-            App.singleton.things_to_update.remove(self)
-
 
 class MainCoords(Coords, ThingToUpdate):
     keys_to_vectrors = {
@@ -150,16 +146,19 @@ class VirtualDot(ThingToDraw):
         pg.draw.circle(sc, self.color, pos, 5)
         sc.blit(pg.font.Font(None, 24).render(self.name, False, self.color), (pos[0], pos[1] + 10))
 
+    def __repr__(self):
+        return f'Dot({self.name}:{self.pos}:real={self.real})'
+
 
 class Dot(VirtualDot, ThingToRefract):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
         VirtualDot.__init__(self, pos, name, color, real)
-        ThingToRefract.__init__(self, pos)
 
 
 class MouseDot(Dot, ThingToUpdate):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
-        super().__init__(pos, name)
+        ThingToUpdate.__init__(self)
+        Dot.__init__(self, pos, name, color, real)
         VirtualDot.__init__(self, pos, name, color, real)
         ThingToUpdate.__init__(self)
 
@@ -196,7 +195,7 @@ class MainOpticAxis(ThingToDraw):
 
 class Line(ThingToRefract):
     def __init__(self, dots: Tuple[Dot, Dot], real: bool = True):
-        super().__init__(dots[0].pos)
+        ThingToRefract.__init__(self, dots[0].pos)
 
         Drawer.singleton.add(self)
 
@@ -209,12 +208,15 @@ class Line(ThingToRefract):
 
         pg.draw.line(sc, col.line, pos1, pos2, 2)
 
+    def __repr__(self):
+        return f'Line({self.dots[0].__repr__()}, {self.dots[1].__repr__()})'
+
 
 class Refractor:
     @staticmethod
     def refract_all():
         for i in ThingToRefract.all_things:
-            if i.real:
+            if not i.real:
                 i.__del__()
         print(ThingToRefract.all_things)
 
@@ -233,7 +235,7 @@ class Refractor:
             d1 = list(filter(lambda x: x.name == line.dots[0].name + '\'', ndots))[0]
             d2 = list(filter(lambda x: x.name == line.dots[1].name + '\'', ndots))[0]
 
-            Line((d1, d2), False)
+            Line((d1, d2), real=False)
 
     @staticmethod
     def refract_dot(one: Dot) -> (Dot, None):
@@ -251,7 +253,7 @@ class Refractor:
         if not rdot[1]:
             print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
 
-        return Dot(rdot[0], one.name + '\'', col.dot2, False)
+        return Dot(rdot[0], one.name + '\'', col.dot2, real=False)
 
 
 app = App((1600, 1000))
@@ -260,10 +262,12 @@ MainOpticAxis()
 
 Line((Dot((-200, 100), '1'), Dot((-170, -150), '2')))
 
+# Dot((10, 10), '3')
+
 # MouseDot((-10, 10), '')
 
 
 while True:
-    app.tick()
     Refractor.refract_all()
+    app.tick()
 
