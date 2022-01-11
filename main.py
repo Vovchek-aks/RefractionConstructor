@@ -58,6 +58,10 @@ class ThingToUpdate:
     def update(self, event: pg.event.Event):
         pass
 
+    def __del__(self):
+        if self in App.singleton.things_to_update:
+            App.singleton.things_to_update.remove(self)
+
 
 class MainCoords(Coords, ThingToUpdate):
     keys_to_vectrors = {
@@ -98,6 +102,9 @@ class ThingToDraw(Coords):
     def draw(self, mc: MainCoords, sc: pg.Surface):
         pass
 
+    def __del__(self):
+        Drawer.singleton.things.remove(self)
+
 
 class ThingToRefract(ThingToDraw):
     all_things = []
@@ -105,6 +112,10 @@ class ThingToRefract(ThingToDraw):
     def __init__(self, pos: Tuple[float, float]):
         super().__init__(pos)
         ThingToRefract.all_things += [self]
+
+    def __del__(self):
+        if self in ThingToRefract.all_things:
+            ThingToRefract.all_things.remove(self)
 
 
 class Drawer:
@@ -202,7 +213,10 @@ class Line(ThingToRefract):
 class Refractor:
     @staticmethod
     def refract_all():
-        ThingToRefract.all_things = list(filter(lambda x: x.real, ThingToRefract.all_things))
+        for i in ThingToRefract.all_things:
+            if i.real:
+                i.__del__()
+        print(ThingToRefract.all_things)
 
         lines: List[Line] = []
         ndots: List[Dot] = []
@@ -248,8 +262,8 @@ Line((Dot((-200, 100), '1'), Dot((-170, -150), '2')))
 
 # MouseDot((-10, 10), '')
 
-Refractor.refract_all()
 
 while True:
     app.tick()
+    Refractor.refract_all()
 
