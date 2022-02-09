@@ -21,14 +21,12 @@ class App:
         self.drawer = Drawer()
         self.drawer.m_coords = MainCoords((self.width / 2, self.height / 2))
 
-        self.things_to_update: List[ThingToUpdate] = []
-
     def update(self):
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 exit(0)
 
-            for ttu in self.things_to_update:
+            for ttu in Thing.get(update=True):
                 ttu.update(event)
 
         pg.display.set_caption(str(self.clock.get_fps()))
@@ -46,20 +44,32 @@ class App:
         self.clock.tick(60)
 
 
+class Thing:
+    things = []
+
+    def __init__(self, draw=False, update=False, refract=False):
+        self.need_to_draw = draw
+        self.need_to_update = update
+        self.need_to_refract = refract
+
+        Thing.things += [self]
+
+    def die(self):
+        Thing.things.remove(self)
+
+    @staticmethod
+    def get(draw=None, update=None, refract=None):
+        return list(filter(lambda x: (x.need_to_draw == draw or draw is None) and
+                                     (x.need_to_update == update or update is None) and
+                                     (x.need_to_refract == refract or refract is None), Thing.things))
+
+
 class Coords:
     def __init__(self, pos: Tuple[float, float]):
         self.pos = pos
 
 
-class ThingToUpdate:
-    def __init__(self):
-        App.singleton.things_to_update += [self]
-
-    def update(self, event: pg.event.Event):
-        pass
-
-
-class MainCoords(Coords, ThingToUpdate):
+class MainCoords(Coords, Thing):
     keys_to_vectrors = {
         pg.K_UP: (0, 1),
         pg.K_DOWN: (0, -1),
@@ -68,7 +78,9 @@ class MainCoords(Coords, ThingToUpdate):
     }
 
     def __init__(self, pos: Tuple[float, float]):
-        super().__init__(pos)
+        Coords.__init__(self, pos)
+        Thing.__init__(self, update=True)
+
         self.coords: List[Coords] = []
         self.zoom: float = 1
 
@@ -94,51 +106,24 @@ class MainCoords(Coords, ThingToUpdate):
                 self.zoom = 1
 
 
-class ThingToDraw(Coords):
-    def draw(self, mc: MainCoords, sc: pg.Surface):
-        pass
-
-    def __del__(self):
-        Drawer.singleton.things.remove(self)
-
-
-class ThingToRefract(ThingToDraw):
-    all_things = []
-
-    def __init__(self, pos: Tuple[float, float]):
-        super().__init__(pos)
-        ThingToRefract.all_things += [self]
-
-    def __del__(self):
-        if self in ThingToRefract.all_things:
-            ThingToRefract.all_things.remove(self)
-
-
 class Drawer:
     singleton = None
 
     def __init__(self):
-        self.things: List[ThingToDraw] = []
-        self.m_coords = MainCoords((0, 0))
-
-        Drawer.singleton = self
+        self.m_coords: (MainCoords, None) = None
 
     def draw_all(self, sc: pg.Surface):
-        for i in self.things:
+        for i in sorted(Thing.get(draw=True), key=lambda x: 0 if x.__class__ == Line else 1):
             i.draw(self.m_coords, sc)
 
-    def add(self, ttd: ThingToDraw):
-        self.things += [ttd]
 
-
-class VirtualDot(ThingToDraw):
+class VirtualDot(Coords, Thing):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
-        super().__init__(pos)
+        Coords.__init__(self, pos)
+        Thing.__init__(self, draw=True)
         self.name = name
         self.color = color
         self.real = real
-
-        Drawer.singleton.add(self)
 
     def draw(self, mc: MainCoords, sc: pg.Surface):
         pos = mc.get_one(self)
@@ -150,36 +135,35 @@ class VirtualDot(ThingToDraw):
         return f'Dot({self.name}:{self.pos}:real={self.real})'
 
 
-class Dot(VirtualDot, ThingToRefract):
+class Dot(VirtualDot):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
         VirtualDot.__init__(self, pos, name, color, real)
+        self.need_to_refract = True
 
 
-class MouseDot(Dot, ThingToUpdate):
+# shit
+class MouseDot(Dot):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
-        ThingToUpdate.__init__(self)
         Dot.__init__(self, pos, name, color, real)
-        VirtualDot.__init__(self, pos, name, color, real)
-        ThingToUpdate.__init__(self)
+        self.need_to_update = True
 
     def update(self, event: pg.event.Event):
         if event.type == pg.MOUSEMOTION:
-            p = Drawer.singleton.m_coords.pos
-            self.pos = funcs.sum_tuple(pg.mouse.get_pos(), funcs.mult_tuple_num(p, -1))
+            p = App.singleton.drawer.m_coords
+            self.pos = funcs.sum_tuple(pg.mouse.get_pos(), funcs.mult_tuple_num(p.pos, -1))
 
 
-class MainOpticAxis(ThingToDraw):
+class MainOpticAxis(Coords, Thing):
     singleton = None
 
     def __init__(self):
-        super().__init__((0, 0))
+        Coords.__init__(self, (0, 0))
+        Thing.__init__(self, draw=True)
 
         dr = Drawer.singleton
 
         self.focus = VirtualDot((100, 0), 'F', col.milk)
-        self.focus2 = VirtualDot((-100, 0), 'F \'', col.milk)
-        dr.add(self.focus)
-        dr.add(self)
+        self.focus2 = VirtualDot((-self.focus.pos[0], 0), 'F \'', col.milk)
 
         MainOpticAxis.singleton = self
 
@@ -191,13 +175,12 @@ class MainOpticAxis(ThingToDraw):
 
         if self.focus.pos[0] < self.pos[0]:
             pg.draw.line(sc, col.milk, (pos[0] - 20, pos[1] + 200), (pos[0] + 20, pos[1] + 200), 5)
+            pg.draw.line(sc, col.milk, (pos[0] - 20, pos[1] - 200), (pos[0] + 20, pos[1] - 200), 5)
 
 
-class Line(ThingToRefract):
+class Line(Thing):
     def __init__(self, dots: Tuple[Dot, Dot], real: bool = True):
-        ThingToRefract.__init__(self, dots[0].pos)
-
-        Drawer.singleton.add(self)
+        Thing.__init__(self, draw=True, refract=True)
 
         self.dots = dots
         self.real = real
@@ -212,17 +195,27 @@ class Line(ThingToRefract):
         return f'Line({self.dots[0].__repr__()}, {self.dots[1].__repr__()})'
 
 
+class ShapeGenerator:
+    @staticmethod
+    def make_polygon(dots: List[Dot]) -> None:
+        if len(dots) < 2:
+            return
+
+        f = dots[0]
+        for d in dots[1:]:
+            Line((f, d))
+            f = d
+
+        Line((dots[0], dots[-1]))
+
+
 class Refractor:
     @staticmethod
     def refract_all():
-        for i in ThingToRefract.all_things:
-            if not i.real:
-                i.__del__()
-        print(ThingToRefract.all_things)
-
         lines: List[Line] = []
         ndots: List[Dot] = []
-        for i in ThingToRefract.all_things.copy():
+
+        for i in Thing.get(refract=True).copy():
             if isinstance(i, Line):
                 lines += [i]
                 continue
@@ -250,24 +243,29 @@ class Refractor:
 
         rdot = funcs.line_intersection(line1, line2)
 
-        if not rdot[1]:
-            print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
+        # if not rdot[1]:
+        #     print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
 
         return Dot(rdot[0], one.name + '\'', col.dot2, real=False)
+
+    @staticmethod
+    def del_all_not_real_shit():
+        for i in Thing.get(refract=True):
+            if not i.real:
+                i.die()
 
 
 app = App((1600, 1000))
 
 MainOpticAxis()
 
-Line((Dot((-200, 100), '1'), Dot((-170, -150), '2')))
+ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-170, -150), '2'), Dot((-550, -330), '3')])
 
-# Dot((10, 10), '3')
+# Dot((10, 0), '3')
 
 # MouseDot((-10, 10), '')
-
 
 while True:
     Refractor.refract_all()
     app.tick()
-
+    Refractor.del_all_not_real_shit()
