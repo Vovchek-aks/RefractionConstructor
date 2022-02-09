@@ -8,7 +8,7 @@ import funcs
 class App:
     singleton = None
 
-    def __init__(self, size: Tuple[int, int], name: str = 'App'):
+    def __init__(self, size: Tuple[int, int]):
         App.singleton = self
 
         self.size = self.width, self.height = size
@@ -160,8 +160,6 @@ class MainOpticAxis(Coords, Thing):
         Coords.__init__(self, (0, 0))
         Thing.__init__(self, draw=True)
 
-        dr = Drawer.singleton
-
         self.focus = VirtualDot((100, 0), 'F', col.milk)
         self.focus2 = VirtualDot((-self.focus.pos[0], 0), 'F \'', col.milk)
 
@@ -263,7 +261,7 @@ ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-170, -150), '2'), Dot(
 
 # Dot((10, 0), '3')
 
-# MouseDot((-10, 10), '')
+MouseDot((-10, 10), '')
 
 while True:
     Refractor.refract_all()
