@@ -29,7 +29,7 @@ class App:
             for ttu in Thing.get(update=True):
                 ttu.update(event)
 
-        pg.display.set_caption(str(self.clock.get_fps()))
+        pg.display.set_caption(str(self.drawer.m_coords.zoom))
 
     def draw(self):
         self.sc.fill(col.background)
@@ -95,11 +95,11 @@ class MainCoords(Coords, Thing):
     def update(self, event: pg.event.Event):
         if event.type == pg.KEYDOWN:
             if event.key in MainCoords.keys_to_vectrors:
-                delta = funcs.mult_tuple_num(MainCoords.keys_to_vectrors[event.key], 50 / self.zoom)
+                delta = funcs.mult_tuple_num(MainCoords.keys_to_vectrors[event.key], 150 / self.zoom)
                 self.pos = funcs.sum_tuple(self.pos, delta)
 
             elif event.key in {pg.K_PAGEDOWN, pg.K_PAGEUP}:
-                self.zoom += .3 * (1 if event.key == pg.K_PAGEUP else -1)
+                self.zoom *= (2 if event.key == pg.K_PAGEUP else 1 / 2)
 
             elif event.key == pg.K_HOME:
                 self.pos = self.start_pos
@@ -136,7 +136,8 @@ class VirtualDot(Coords, Thing):
 
 
 class Dot(VirtualDot):
-    def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
+    def __init__(self, pos: Tuple[float, float], name: str = '', color: Tuple[int, int, int] = col.dot,
+                 real: bool = True):
         VirtualDot.__init__(self, pos, name, color, real)
         self.need_to_refract = True
 
@@ -206,32 +207,63 @@ class ShapeGenerator:
 
         Line((dots[0], dots[-1]))
 
+    @staticmethod
+    def line_divider(line: Line, n: int):
+        d1, d2 = line.dots
+
+        line.die()
+        del line
+
+        delta = funcs.mult_tuple_num(funcs.sum_tuple(d2.pos, funcs.mult_tuple_num(d1.pos, -1)), 1 / n)
+
+        f = d1
+        for i in range(n - 1):
+            d = Dot(funcs.sum_tuple(f.pos, delta))
+            Line((f, d))
+            f = d
+
+        Line((f, d2))
+
 
 class Refractor:
     @staticmethod
     def refract_all():
-        lines: List[Line] = []
-        ndots: List[Dot] = []
+        dots = dict()
 
-        for i in Thing.get(refract=True).copy():
-            if isinstance(i, Line):
-                lines += [i]
-                continue
+        shit = Thing.get(refract=True).copy()
+        shit.sort(key=lambda x: 0 if isinstance(x, Line) else 1)
 
-            d = Refractor.refract_dot(i)
-            if d is not None:
-                ndots += [d]
+        while shit:
+            s = shit[0]
+            if isinstance(s, Line):
+                d1, d2 = s.dots
 
-        for line in lines:
-            d1 = list(filter(lambda x: x.name == line.dots[0].name + '\'', ndots))[0]
-            d2 = list(filter(lambda x: x.name == line.dots[1].name + '\'', ndots))[0]
+                if d1 in shit:
+                    p = d1.pos
+                    shit.remove(d1)
+                    d1 = Refractor.refract_dot(d1)
+                    dots[p] = d1
+                else:
+                    d1 = dots[d1.pos]
 
-            Line((d1, d2), real=False)
+                if d2 in shit:
+                    p = d2.pos
+                    shit.remove(d2)
+                    d2 = Refractor.refract_dot(d2)
+                    dots[p] = d2
+                else:
+                    d2 = dots[d2.pos]
+
+                Line((d1, d2), real=False)
+            else:
+                Refractor.refract_dot(s)
+
+            shit = shit[1:]
 
     @staticmethod
     def refract_dot(one: Dot) -> (Dot, None):
-        # if one.pos[1] == MainOpticAxis.singleton.pos[1]:
-        #     raise NotImplementedError('Dot.y = MOA.y')
+        if one.pos[1] == MainOpticAxis.singleton.pos[1]:
+            one.pos = (one.pos[0], one.pos[1] + 10 ** -9)
 
         fpos = MainOpticAxis.singleton.focus.pos if one.pos[0] < MainOpticAxis.singleton.pos[0] else \
             MainOpticAxis.singleton.focus2.pos
@@ -244,7 +276,7 @@ class Refractor:
         # if not rdot[1]:
         #     print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
 
-        return Dot(rdot[0], one.name + '\'', col.dot2, real=False)
+        return Dot(rdot[0], one.name + ('\'' if one.name else ''), col.dot2, real=False)
 
     @staticmethod
     def del_all_not_real_shit():
@@ -257,11 +289,11 @@ app = App((1600, 1000))
 
 MainOpticAxis()
 
-ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-170, -150), '2'), Dot((-550, -330), '3')])
+# ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-170, -150), '2'), Dot((-550, -330), '3')])
 
-# Dot((10, 0), '3')
+ShapeGenerator.line_divider(Line((Dot((-200, -100), '1'), Dot((-300, -400), '2'))), 20)
 
-MouseDot((-10, 10), '')
+# MouseDot((-10, 10), '')
 
 while True:
     Refractor.refract_all()
