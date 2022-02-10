@@ -21,6 +21,8 @@ class App:
         self.drawer = Drawer()
         self.drawer.m_coords = MainCoords((self.width / 2, self.height / 2))
 
+        self.im = InputManager()
+
     def update(self):
         for event in pg.event.get():
             if event.type == pg.QUIT:
@@ -29,7 +31,7 @@ class App:
             for ttu in Thing.get(update=True):
                 ttu.update(event)
 
-        pg.display.set_caption(str(self.drawer.m_coords.zoom))
+        pg.display.set_caption(str(self.drawer.m_coords.zoom) + ' ' + str(self.im.m.pos))
 
     def draw(self):
         self.sc.fill(col.background)
@@ -38,7 +40,9 @@ class App:
         pg.display.flip()
 
     def tick(self):
+        Refractor.del_all_not_real_shit()
         self.update()
+        Refractor.refract_all()
         self.draw()
 
         self.clock.tick(60)
@@ -62,6 +66,99 @@ class Thing:
         return list(filter(lambda x: (x.need_to_draw == draw or draw is None) and
                                      (x.need_to_update == update or update is None) and
                                      (x.need_to_refract == refract or refract is None), Thing.things))
+
+
+class InputManager(Thing):
+    def __init__(self):
+        Thing.__init__(self, update=True)
+
+        self.m = MouseDot((10, 10), '')
+
+        self.moa = MainOpticAxis()
+
+    def update(self, event):
+        if event.type == pg.KEYDOWN:
+            if event.key == pg.K_m:
+                self.m.need_to_draw *= -1
+                self.m.need_to_refract *= -1
+            elif event.key == pg.K_SPACE:
+                try:
+                    self.input()
+                except:
+                    print('ошибка')
+
+    def input(self):
+        print('\n\nВыбор действия')
+        print('0 - переместить фокус')
+        print('1 - добавить точку')
+        print('2 - переместить точку')
+        print('3 - удалить точку')
+        print('4 - соединить точки')
+        print('5 - разединить точки')
+        print('6 - добавить промежуточные точки')
+        print('7 - сохранить')
+        print('8 - загрузить')
+        n = input().strip()
+
+        if n == '0':
+            print('введите новое значение F')
+
+            self.moa.update_f(float(input().strip()))
+        elif n == '1':
+            print('введите координаты точки через пробел')
+            pos = tuple(float(i) for i in input().strip().split())
+            pos = pos[0], pos[1]
+            print('введите имя точки')
+            name = input().strip()
+
+            Dot(pos, name)
+        elif n == '2':
+            print('введите имя точки')
+            name = input().strip()
+            print('введите новые координаты точки через пробел')
+            pos = tuple(float(i) for i in input().strip().split())
+
+            tuple(filter(lambda x: isinstance(x, Dot) and x.name == name,
+                         Thing.get(draw=True, refract=True)))[0].pos = pos
+        elif n == '3':
+            print('введите имя точки')
+            name = input().strip()
+
+            for i in filter(lambda x: isinstance(x, Dot) and x.name == name,
+                            Thing.get(draw=True, refract=True)):
+                i.die()
+        elif n == '4':
+            print('введите имена точек')
+            names = input().strip().split()
+
+            ShapeGenerator.make_polygon(list(
+                filter(lambda x: x.__class__ == Dot and x.name in names,
+                       Thing.get(draw=True, refract=True))))
+
+        elif n == '5':
+            print('введите имена 2 точек')
+            names = input().strip().split()[:2]
+
+            for i in filter(lambda x: isinstance(x, Line) and
+                            x.dots[0].name in names and
+                            x.dots[1].name in names,
+                            Thing.get(draw=True, refract=True)):
+                i.die()
+        elif n == '6':
+            print('введите имена 2 точек')
+            names = input().strip().split()[:2]
+            print('на сколько частей разделить отрезок?')
+            n = int(input().strip())
+
+            line = tuple(filter(lambda x: isinstance(x, Line) and
+                                x.dots[0].name in names and
+                                x.dots[1].name in names,
+                                Thing.get(draw=True, refract=True)))[0]
+            ShapeGenerator.line_divider(line, n)
+        else:
+            raise Exception()
+
+        print('успех')
 
 
 class Coords:
@@ -141,6 +238,14 @@ class Dot(VirtualDot):
         VirtualDot.__init__(self, pos, name, color, real)
         self.need_to_refract = True
 
+    def die(self):
+        Thing.die(self)
+
+        for i in filter(lambda x: isinstance(x, Line) and
+                        self in x.dots,
+                        Thing.get(draw=True, update=True, refract=True)):
+            i.die()
+
 
 # shit
 class MouseDot(Dot):
@@ -175,6 +280,10 @@ class MainOpticAxis(Coords, Thing):
         if self.focus.pos[0] < self.pos[0]:
             pg.draw.line(sc, col.milk, (pos[0] - 20, pos[1] + 200), (pos[0] + 20, pos[1] + 200), 5)
             pg.draw.line(sc, col.milk, (pos[0] - 20, pos[1] - 200), (pos[0] + 20, pos[1] - 200), 5)
+
+    def update_f(self, x: float):
+        self.focus.pos = x, 0
+        self.focus2.pos = -x, 0
 
 
 class Line(Thing):
@@ -228,7 +337,7 @@ class ShapeGenerator:
 class Refractor:
     @staticmethod
     def refract_all():
-        dots = dict()
+        dots = dict().copy()
 
         shit = Thing.get(refract=True).copy()
         shit.sort(key=lambda x: 0 if isinstance(x, Line) else 1)
@@ -287,15 +396,8 @@ class Refractor:
 
 app = App((1600, 1000))
 
-MainOpticAxis()
-
-# ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-170, -150), '2'), Dot((-550, -330), '3')])
-
-ShapeGenerator.line_divider(Line((Dot((-200, -100), '1'), Dot((-300, -400), '2'))), 20)
-
-# MouseDot((-10, 10), '')
+Dot((-200, 100), '1')
+Dot((-350, 100), '2')
 
 while True:
-    Refractor.refract_all()
     app.tick()
-    Refractor.del_all_not_real_shit()
