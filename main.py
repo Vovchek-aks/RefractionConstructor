@@ -1,8 +1,9 @@
 from typing import List, Tuple
 import pygame as pg
-import colors as col
+import json
 
 import funcs
+import colors as col
 
 
 class App:
@@ -64,9 +65,9 @@ class Thing:
 
     @staticmethod
     def get(draw=None, update=None, refract=None):
-        return list(filter(lambda x: (x.need_to_draw == draw or draw is None) and
-                                     (x.need_to_update == update or update is None) and
-                                     (x.need_to_refract == refract or refract is None), Thing.things))
+        return list(filter(lambda x: (draw is None or x.need_to_draw == draw) and
+                                     (update is None or x.need_to_update == update) and
+                                     (refract is None or x.need_to_refract == refract), Thing.things))
 
 
 class InputManager(Thing):
@@ -87,6 +88,28 @@ class InputManager(Thing):
                     self.input()
                 except:
                     print('ошибка')
+
+    @staticmethod
+    def save(name: str):
+        ts = []
+        for i in sorted(filter(lambda x: x.__class__ in (Dot, Line) and x.real, Thing.get(draw=True, refract=True)),
+                        key=lambda x: (Dot, Line).index(x.__class__)):
+            if i.__class__ == Dot:
+                ts += [[i.name, list(i.pos)]]
+            else:
+                ts += [[list(i.dots[0].pos), list(i.dots[1].pos)]]
+
+        open(f'saves/{name}.json', 'w', encoding='UTF-8').write(json.dumps(ts))
+
+    @staticmethod
+    def load(name: str):
+        ts = json.load(open(f'saves/{name}.json', encoding="UTF-8"))
+        dots = dict()
+        for i in ts:
+            if i[0].__class__ == str:
+                dots[tuple(i[1])] = Dot(tuple(i[1]), i[0])
+            else:
+                Line((dots[tuple(i[0])], dots[tuple(i[1])]))
 
     def input(self):
         print('\n\nВыбор действия')
@@ -135,9 +158,9 @@ class InputManager(Thing):
             print('введите имена точек')
             names = input().strip().split()
 
-            ShapeGenerator.make_polygon(list(
+            ShapeGenerator.make_polygon(sorted(
                 filter(lambda x: x.__class__ == Dot and x.name in names,
-                       Thing.get(draw=True, refract=True))))
+                       Thing.get(draw=True, refract=True)), key=lambda x: names.index(x.name)))
 
         elif n == '5':
             print('введите имена 2 точек')
@@ -159,6 +182,14 @@ class InputManager(Thing):
                                 x.dots[1].name in names,
                                 Thing.get(draw=True, refract=True)))[0]
             ShapeGenerator.line_divider(line, n)
+        elif n == '7':
+            print('введите название файла')
+
+            InputManager.save(input().strip())
+        elif n == '8':
+            print('введите название файла')
+
+            InputManager.load(input().strip())
         else:
             raise Exception()
 
@@ -251,7 +282,6 @@ class Dot(VirtualDot):
             i.die()
 
 
-# shit
 class MouseDot(Dot):
     def __init__(self, pos: Tuple[float, float], name: str, color: Tuple[int, int, int] = col.dot, real: bool = True):
         Dot.__init__(self, pos, name, color, real)
@@ -386,9 +416,6 @@ class Refractor:
 
         rdot = funcs.line_intersection(line1, line2)
 
-        # if not rdot[1]:
-        #     print(f'dot "{one.name}":{one.pos} have strange refraction {rdot[0]}')
-
         return Dot(rdot[0], one.name + ('\'' if one.name else ''), col.dot2, real=False)
 
     @staticmethod
@@ -399,9 +426,6 @@ class Refractor:
 
 
 app = App((1600, 1000))
-
-Dot((-200, 100), '1')
-Dot((-350, 100), '2')
 
 while True:
     app.tick()
