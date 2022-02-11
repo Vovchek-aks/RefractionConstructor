@@ -405,14 +405,15 @@ class Refractor:
 
     @staticmethod
     def refract_dot(one: Dot) -> (Dot, None):
+        p = one.pos
         if one.pos[1] == MainOpticAxis.singleton.pos[1]:
-            one.pos = (one.pos[0], one.pos[1] + 10 ** -9)
+            p = (one.pos[0], one.pos[1] + 10 ** -3)
 
-        fpos = MainOpticAxis.singleton.focus.pos if one.pos[0] < MainOpticAxis.singleton.pos[0] else \
+        fpos = MainOpticAxis.singleton.focus.pos if p[0] < MainOpticAxis.singleton.pos[0] else \
             MainOpticAxis.singleton.focus2.pos
 
-        line1 = (one.pos, MainOpticAxis.singleton.pos)
-        line2 = ((MainOpticAxis.singleton.pos[0], one.pos[1]), fpos)
+        line1 = (p, MainOpticAxis.singleton.pos)
+        line2 = ((MainOpticAxis.singleton.pos[0], p[1]), fpos)
 
         rdot = funcs.line_intersection(line1, line2)
 
@@ -425,7 +426,13 @@ class Refractor:
                 i.die()
 
 
-app = App((1600, 1000))
+try:
+    app = App((1600, 1000))
 
-while True:
-    app.tick()
+    ShapeGenerator.make_polygon([Dot((-200, 100), '1'), Dot((-350, 100), '2'), Dot((-200, -100), '3')])
+
+    while True:
+        app.tick()
+except:
+    while True:
+        input('ПРОИЗОШЛА НЕИЗВЕСТНАЯ ОШИБКА')
