@@ -49,17 +49,18 @@ class App:
 
 
 class Thing:
-    things = []
+    things = set()
 
     def __init__(self, draw=False, update=False, refract=False):
         self.need_to_draw = draw
         self.need_to_update = update
         self.need_to_refract = refract
 
-        Thing.things += [self]
+        Thing.things.add(self)
 
     def die(self):
-        Thing.things.remove(self)
+        if self in Thing.things:
+            Thing.things.remove(self)
 
     @staticmethod
     def get(draw=None, update=None, refract=None):
@@ -105,11 +106,14 @@ class InputManager(Thing):
 
             self.moa.update_f(float(input().strip()))
         elif n == '1':
-            print('введите координаты точки через пробел')
+            print('введите координаты новой точки через пробел')
             pos = tuple(float(i) for i in input().strip().split())
             pos = pos[0], pos[1]
             print('введите имя точки')
             name = input().strip()
+
+            if not name:
+                raise NameError()
 
             Dot(pos, name)
         elif n == '2':
@@ -243,7 +247,7 @@ class Dot(VirtualDot):
 
         for i in filter(lambda x: isinstance(x, Line) and
                         self in x.dots,
-                        Thing.get(draw=True, update=True, refract=True)):
+                        Thing.get(draw=True, refract=True)):
             i.die()
 
 
